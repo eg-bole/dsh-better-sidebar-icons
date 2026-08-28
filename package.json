@@ -1,6 +1,6 @@
 {
   "name": "dsh-better-sidebar-icons",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "VSCode-style file/folder icon theme for the dsh-better-sidebar explorer and editor tabs (vscode-icons port). Applied as a pure DOM overlay: no core changes, unload-safe.",
   "type": "module",
   "main": "lib/index.js",
