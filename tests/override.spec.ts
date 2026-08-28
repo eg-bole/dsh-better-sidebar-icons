@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 /**
- * DOM overlay tests (src/client/override.ts): the overlay swaps the
- * better-sidebar explorer row svg icons (VscFile / VscFolder /
- * VscFolderOpened shapes) and editor-tab icons for the plugin-route theme
- * images. Pins row detection (title ⇒ file, folder path shape ⇒ open/closed,
+ * DOM overlay tests (src/client/override.ts): the overlay shows the
+ * vscode-icons theme images beside the better-sidebar explorer row svg
+ * icons (VscFile / VscFolder / VscFolderOpened shapes) and editor-tab
+ * icons. Pins row detection (title ⇒ file, folder path shape ⇒ open/closed,
  * no role ⇒ root), tab detection (title resolves to a real file), the
- * React-re-render re-apply loop (exactly one icon per element), scheme
+ * React-rebuild re-apply loop (original svg stays in place, hidden; a
+ * rebuilt svg is re-hidden; exactly one overlay img per element), scheme
  * flips, and unload restoration.
+ *
+ * The overlay NEVER replaces React-managed nodes (that breaks React's DOM
+ * bookkeeping): the original svg keeps its position with display:none and
+ * our img is inserted beside it.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createIconOverlay } from '../src/client/override.ts'
@@ -14,6 +19,7 @@ import { createIconOverlay } from '../src/client/override.ts'
 const FOLDER_CLOSED_D = 'M2 4.5V6H5.58579'
 const FOLDER_OPEN_D = 'M2 4.5V9.10022L2.92389'
 const FILE_D = 'M1 1H15V15H1Z'
+const MARK = 'data-dsh-better-sidebar-icons'
 
 const srcPath = (img: HTMLImageElement | null | undefined): string =>
   img === null || img === undefined ? '' : new URL(img.src).pathname
@@ -90,15 +96,20 @@ beforeEach(() => {
 })
 
 describe('row overlay', () => {
-  it('overlays file rows with the resolved icon (title ⇒ file)', async () => {
+  it('keeps the original svg in place (hidden) and inserts the img beside it', async () => {
     const host = mountHost([fileRow('package.json', '/workspace/package.json')])
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    const img = host.querySelector<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    const row = host.firstElementChild as HTMLElement
+    const img = row.querySelector<HTMLImageElement>(`img[${MARK}]`)
     expect(img).not.toBeNull()
     expect(srcPath(img)).toBe('/dsh-better-sidebar-icons/icons/file_type_npm.svg')
     expect(img!.width).toBe(14)
+    // The React-managed svg is still a direct child, just hidden.
+    const svgs = Array.from(row.children).filter((c): c is SVGSVGElement => c instanceof SVGElement)
+    expect(svgs.length).toBe(1)
+    expect(svgs[0]!.style.display).toBe('none')
   })
 
   it('overlays folder rows with closed/open variants (path shape ⇒ state)', async () => {
@@ -106,7 +117,7 @@ describe('row overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    const imgs = host.querySelectorAll<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    const imgs = host.querySelectorAll<HTMLImageElement>(`img[${MARK}]`)
     expect(imgs.length).toBe(2)
     expect(srcPath(imgs[0])).toBe('/dsh-better-sidebar-icons/icons/folder_type_src.svg')
     expect(srcPath(imgs[1])).toBe('/dsh-better-sidebar-icons/icons/folder_type_src_opened.svg')
@@ -117,7 +128,7 @@ describe('row overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    const img = host.querySelector<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    const img = host.querySelector<HTMLImageElement>(`img[${MARK}]`)
     expect(img).not.toBeNull()
     expect(srcPath(img)).toBe('/dsh-better-sidebar-icons/icons/default_root_folder_opened.svg')
   })
@@ -132,45 +143,58 @@ describe('row overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    expect(host.querySelector('img[data-dsh-better-sidebar-icons]')).toBeNull()
+    expect(host.querySelector(`img[${MARK}]`)).toBeNull()
   })
 
-  it('re-applies after React restores the svg, leaving exactly one icon', async () => {
+  it('re-hides a svg React rebuilds beside the img, keeping exactly one overlay', async () => {
     const host = mountHost([fileRow('main.py', '/workspace/main.py')])
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    expect(host.querySelectorAll('img[data-dsh-better-sidebar-icons]').length).toBe(1)
-    // Simulate a React re-render: the svg is back, the img is gone.
+    expect(host.querySelectorAll(`img[${MARK}]`).length).toBe(1)
+    // Simulate a React rebuild: React re-inserts its svg before the img
+    // (the img is an unknown node to React, so the svg lands in front).
     const row = host.firstElementChild as HTMLElement
-    row.replaceChild(makeSvg(FILE_D), row.querySelector('img[data-dsh-better-sidebar-icons]')!)
+    const img = row.querySelector(`img[${MARK}]`) as HTMLImageElement
+    row.insertBefore(makeSvg(FILE_D), img)
     await tick()
-    const imgs = host.querySelectorAll<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    // eslint-disable-next-line no-console
+    console.log('DEBUG re-hides: imgs=', host.querySelectorAll(`img[${MARK}]`).length,
+      'children=', Array.from(row.children).map(c => c.tagName).join(','),
+      'svgDisplay=', Array.from(row.children).filter(c => c instanceof SVGElement).map(s => (s as SVGElement).style.display).join(','))
+    const imgs = host.querySelectorAll<HTMLImageElement>(`img[${MARK}]`)
     expect(imgs.length).toBe(1)
     expect(srcPath(imgs[0])).toBe('/dsh-better-sidebar-icons/icons/file_type_python.svg')
+    const svgs = Array.from(row.children).filter((c): c is SVGSVGElement => c instanceof SVGElement)
+    // The original hidden svg stays in place (React can still manage it) and
+    // the rebuilt one is hidden too: every svg is hidden, one img shows.
+    expect(svgs.length).toBe(2)
+    expect(svgs.every(s => s.style.display === 'none')).toBe(true)
   })
 
-  it('restores the original svg on dispose', async () => {
+  it('restores the original svg (display back, img removed) on dispose', async () => {
     const host = mountHost([fileRow('package.json', '/workspace/package.json'), folderRow('src', false)])
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    expect(host.querySelectorAll('img[data-dsh-better-sidebar-icons]').length).toBe(2)
+    expect(host.querySelectorAll(`img[${MARK}]`).length).toBe(2)
     overlay.dispose()
-    const rows = host.children
-    expect(rows[0]!.firstElementChild!.tagName.toLowerCase()).toBe('svg')
-    expect(rows[1]!.firstElementChild!.tagName.toLowerCase()).toBe('svg')
-    expect(host.querySelector('img[data-dsh-better-sidebar-icons]')).toBeNull()
+    expect(host.querySelector(`img[${MARK}]`)).toBeNull()
+    for (const row of host.children) {
+      const svgs = Array.from(row.children).filter((c): c is SVGSVGElement => c instanceof SVGElement)
+      expect(svgs.length).toBe(1)
+      expect(svgs[0]!.style.display).not.toBe('none')
+    }
   })
 
   it('starts once the host mounts (async sidebar)', async () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    expect(document.querySelector('img[data-dsh-better-sidebar-icons]')).toBeNull()
+    expect(document.querySelector(`img[${MARK}]`)).toBeNull()
     const host = mountHost([fileRow('index.ts', '/workspace/index.ts')])
     await tick()
-    const img = host.querySelector<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    const img = host.querySelector<HTMLImageElement>(`img[${MARK}]`)
     expect(img).not.toBeNull()
     expect(srcPath(img)).toBe('/dsh-better-sidebar-icons/icons/file_type_typescript.svg')
     overlay.dispose()
@@ -182,7 +206,7 @@ describe('row overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    const img = host.querySelector<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    const img = host.querySelector<HTMLImageElement>(`img[${MARK}]`)
     expect(srcPath(img)).toBe('/dsh-better-sidebar-icons/icons/file_type_light_ada.svg')
     document.body.setAttribute('data-ds-dark-theme', '')
     await tick()
@@ -197,7 +221,7 @@ describe('tab overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    const img = host.querySelector<HTMLImageElement>('img[data-dsh-better-sidebar-icons]')
+    const img = host.querySelector<HTMLImageElement>(`img[${MARK}]`)
     expect(img).not.toBeNull()
     expect(srcPath(img)).toBe('/dsh-better-sidebar-icons/icons/file_type_typescript.svg')
   })
@@ -207,7 +231,7 @@ describe('tab overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    expect(host.querySelector('img[data-dsh-better-sidebar-icons]')).toBeNull()
+    expect(host.querySelector(`img[${MARK}]`)).toBeNull()
   })
 
   it('restores tab icons on dispose', async () => {
@@ -215,9 +239,9 @@ describe('tab overlay', () => {
     const overlay = createIconOverlay()
     overlay.start()
     await tick()
-    expect(host.querySelector('img[data-dsh-better-sidebar-icons]')).not.toBeNull()
+    expect(host.querySelector(`img[${MARK}]`)).not.toBeNull()
     overlay.dispose()
-    expect(host.querySelector('img[data-dsh-better-sidebar-icons]')).toBeNull()
+    expect(host.querySelector(`img[${MARK}]`)).toBeNull()
     const tab = host.firstElementChild as HTMLElement
     expect(tab.firstElementChild!.tagName.toLowerCase()).toBe('svg')
   })

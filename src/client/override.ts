@@ -1,7 +1,7 @@
 /**
- * The DOM overlay: swaps the better-sidebar explorer row icons (react-icons
- * VscFile / VscFolder / VscFolderOpened) and the editor-tab icons for the
- * vscode-icons theme images served by the plugin route.
+ * The DOM overlay: shows the vscode-icons theme images beside the
+ * better-sidebar explorer row / editor-tab icons (react-icons VscFile /
+ * VscFolder / VscFolderOpened), served by the plugin route.
  *
  * Row anchoring — the core renders file rows with `title={entry.path}`
  * (folders have no title) and every row carries a `.explorerName` label
@@ -12,10 +12,14 @@
  * resolves to a non-default icon (built-in tabs like Git/Terminal resolve
  * to the default and are left alone).
  *
- * React re-renders rows/tabs on state changes (expand/collapse, refresh,
- * focus, open/close), so a MutationObserver keeps scanning the mounted
- * [data-dsh-better-sidebar] subtree and re-applies; every touched element
- * is restored on dispose (hot reload / disable). Scheme flips
+ * CRITICAL — never replace React-managed nodes: the core renders these
+ * icons as controlled React elements, and swapping them out breaks React's
+ * DOM bookkeeping (its fiber tree still points at the old svg; the next
+ * commit calls removeChild on a detached node and the whole tree blows up).
+ * Instead each overlaid icon keeps the original svg IN PLACE with
+ * `display:none` and inserts our `<img>` beside it — React can update and
+ * remove its node freely, and a rebuilt svg is re-hidden by the next scan.
+ * Everything is restored on dispose (hot reload / disable). Scheme flips
  * (body[data-ds-dark-theme]) re-resolve in place.
  */
 import { ICON_THEME } from './icons-manifest.generated.ts'
@@ -86,33 +90,29 @@ export function createIconOverlay(): IconOverlay {
     for (const [img, o] of overlays) img.src = iconUrl(resolve(o.kind, o.name, o.open, light))
   }
 
-  /** Drop a stale overlay img this element no longer contains (React
-   *  re-rendered and restored its svg). */
-  const dropStale = (el: Element): void => {
-    const stale = el.querySelector<HTMLElement>(`[${MARK}]`)
-    if (stale !== null) {
-      overlays.delete(stale as HTMLImageElement)
-      stale.remove()
-    }
-  }
-
-  const overlay = (row: HTMLElement, iconEl: SVGElement, kind: RowKind, name: string, open: boolean): void => {
-    dropStale(row)
+  /** Hide the original svg in place and insert our img beside it. */
+  const overlay = (host: HTMLElement, iconEl: SVGElement, kind: RowKind, name: string, open: boolean): void => {
     const img = makeImg(resolve(kind, name, open, !isDarkScheme()), sizeOf(iconEl, ROW_ICON_SIZE))
-    row.replaceChild(img, iconEl)
+    iconEl.style.display = 'none'
+    host.insertBefore(img, iconEl)
     overlays.set(img, { img, orig: iconEl, kind, name, open })
   }
 
   /** One file-tree row: anchor on its explorerName label. */
   const handleRow = (row: HTMLElement): void => {
-    const iconEl = row.firstElementChild
-    if (!(iconEl instanceof SVGElement)) return
-    if (iconEl.hasAttribute(MARK)) return
+    const svgs = Array.from(row.children).filter((c): c is SVGSVGElement => c instanceof SVGElement)
+    if (svgs.length === 0) return
+    if (row.querySelector(`[${MARK}]`) !== null) {
+      // Already overlaid; React may have rebuilt a svg (in front of or
+      // behind our img) — hide every svg in place.
+      for (const svg of svgs) svg.style.display = 'none'
+      return
+    }
+    const iconEl = svgs[0]!
     const nameEl = row.querySelector<HTMLElement>('[class*="explorerName"]')
     const name = (nameEl?.textContent ?? '').trim()
     if (name === '') return
     if (row.hasAttribute('title')) {
-      // File row.
       overlay(row, iconEl, 'file', name, false)
       return
     }
@@ -127,15 +127,30 @@ export function createIconOverlay(): IconOverlay {
    *  before it. Only file tabs (title resolves to a non-default icon) are
    *  overlaid — built-in tabs resolve to the default and stay untouched. */
   const handleTab = (tab: HTMLElement, titleSpan: HTMLElement): void => {
+    // Already overlaid? Our img sits somewhere before the title label —
+    // check the whole run first (the hidden svg may be the nearest sibling).
+    let ourImg = false
+    for (let el = titleSpan.previousElementSibling; el !== null; el = el.previousElementSibling) {
+      if (el instanceof HTMLImageElement && el.hasAttribute(MARK)) {
+        ourImg = true
+        break
+      }
+    }
+    if (ourImg) {
+      // Hide every svg React rendered between the img and the title label.
+      for (let el = titleSpan.previousElementSibling; el !== null; el = el.previousElementSibling) {
+        if (el instanceof SVGElement) el.style.display = 'none'
+      }
+      return
+    }
     let icon: SVGElement | null = null
     for (let el = titleSpan.previousElementSibling; el !== null; el = el.previousElementSibling) {
       if (el instanceof SVGElement) {
         icon = el
         break
       }
-      if (el.hasAttribute(MARK)) return // already overlaid
     }
-    if (icon === null || icon.hasAttribute(MARK)) return
+    if (icon === null) return
     const name = (titleSpan.textContent ?? '').trim()
     if (name === '') return
     // Only recognizable files: built-in tab titles resolve to the default.
@@ -188,7 +203,10 @@ export function createIconOverlay(): IconOverlay {
       bodyObserver = undefined
       disposeScheme?.()
       disposeScheme = undefined
-      for (const [img, o] of overlays) img.parentElement?.replaceChild(o.orig, img)
+      for (const [img, o] of overlays) {
+        o.orig.style.display = ''
+        img.remove()
+      }
       overlays.clear()
     },
   }
