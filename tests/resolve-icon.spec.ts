@@ -11,9 +11,32 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ICON_THEME } from '../src/client/icons-manifest.generated.ts'
-import { iconUrl, resolveFileIcon, resolveFolderIcon } from '../src/client/resolve-icon.ts'
+import { extCandidates, iconUrl, resolveFileIcon, resolveFolderIcon } from '../src/client/resolve-icon.ts'
 
 const ICONS_DIR = join(process.cwd(), 'icons')
+
+describe('extCandidates (termination + semantics)', () => {
+  it('enumerates every dot-to-end suffix, shortest first', () => {
+    expect(extCandidates('archive.tar.gz')).toEqual(['gz', 'tar.gz'])
+    expect(extCandidates('a.d.ts')).toEqual(['ts', 'd.ts'])
+    expect(extCandidates('file.v1.js')).toEqual(['js', 'v1.js'])
+    expect(extCandidates('test.js')).toEqual(['js'])
+  })
+
+  it('never loops or yields candidates for a leading-dot name', () => {
+    // Regression: `'.hidden1'.lastIndexOf('.', -1)` clamps to 0 and re-finds
+    // the leading dot — the old loop grew the array forever and froze the
+    // page the first time a dotfile row rendered (node_modules' hidden
+    // files). A leading dot is not an extension separator (VSCode's
+    // extname('.hidden1') is ''), so no candidates.
+    expect(extCandidates('.hidden1')).toEqual([])
+    expect(extCandidates('.gitignore')).toEqual([])
+    // A dot INSIDE the tail is still a separator (VSCode matches these).
+    expect(extCandidates('.modules.yaml')).toEqual(['yaml'])
+    expect(extCandidates('.package-map.json')).toEqual(['json'])
+    expect(extCandidates('.pnpm-workspace-state-v1.json')).toEqual(['json'])
+  })
+})
 
 describe('resolveFileIcon (VSCode better-sidebar-icons semantics)', () => {
   it('matches exact filenames', () => {
@@ -58,6 +81,13 @@ describe('resolveFileIcon (VSCode better-sidebar-icons semantics)', () => {
     expect(resolveFileIcon('no-extension-file', false)).toBe(ICON_THEME.defaults.file)
     expect(resolveFileIcon('weird.xyz', false)).toBe(ICON_THEME.defaults.file)
     expect(resolveFileIcon('weird.xyz', true)).toBe(ICON_THEME.defaults.file)
+    // Regression: dotfile rows must resolve (and terminate) — the old
+    // extCandidates loop froze the page on these (node_modules' hidden
+    // files). No-leading-dot-only names hit the default; names with a dot
+    // in the tail still match their extension (VSCode semantics).
+    expect(resolveFileIcon('.hidden1', false)).toBe(ICON_THEME.defaults.file)
+    expect(resolveFileIcon('.modules.yaml', false)).toBe(ICON_THEME.fileExtensions['yaml'])
+    expect(resolveFileIcon('.package-map.json', false)).toBe(ICON_THEME.fileExtensions['json'])
   })
 
   it('resolves the light variants where the upstream set ships them', () => {

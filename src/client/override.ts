@@ -163,11 +163,24 @@ export function createIconOverlay(): IconOverlay {
     const host = document.querySelector('[data-dsh-better-sidebar]')
     if (host === null) return
     for (const el of host.querySelectorAll<HTMLElement>('[role="button"], [class*="explorerRow"]')) {
-      if (el.querySelector('[class*="explorerName"]') !== null) handleRow(el)
+      if (el.querySelector('[class*="explorerName"]') !== null) {
+        try {
+          handleRow(el)
+        } catch {
+          // Overlay errors must never escape into the observer (a throw in
+          // a MutationObserver callback would poison the page). Skip the row.
+        }
+      }
     }
     for (const span of host.querySelectorAll<HTMLElement>('[class*="tabTitle"]')) {
       const tab = span.parentElement
-      if (tab !== null) handleTab(tab, span)
+      if (tab !== null) {
+        try {
+          handleTab(tab, span)
+        } catch {
+          // Same guard as rows: a tab overlay failure skips that tab only.
+        }
+      }
     }
   }
 

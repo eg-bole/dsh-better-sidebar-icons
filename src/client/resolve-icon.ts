@@ -61,14 +61,23 @@ const folderNamesOpenIndex = lowerKeyIndex(ICON_THEME.folderNamesOpen)
 const folderNamesLightIndex = lowerKeyIndex(ICON_THEME.folderNamesLight)
 const folderNamesOpenLightIndex = lowerKeyIndex(ICON_THEME.folderNamesOpenLight)
 
-/** Every dot-to-end suffix of a basename, shortest first (`a.tar.gz` →
- *  `['gz', 'tar.gz']`); the empty string is never a candidate (VSCode only
- *  matches truthy extensions). */
+/**
+ * Every dot-to-end suffix of a basename, shortest first (`a.tar.gz` →
+ * `['gz', 'tar.gz']`); the empty string is never a candidate (VSCode only
+ * matches truthy extensions), and a LEADING dot is not an extension
+ * separator (`'.gitignore'` → `[]`, exactly like Node's extname).
+ *
+ * Termination: the next dot must sit strictly before the current one.
+ * `String#lastIndexOf` clamps a negative fromIndex to 0, which would
+ * re-find a leading dot forever (`'.hidden'` → `lastDot` stuck at 0 →
+ * unbounded array growth → main-thread freeze). The `lastDot > 0` guard
+ * stops the walk at the leading-dot position.
+ */
 export function extCandidates(basename: string): string[] {
   const out: string[] = []
   const lastSlash = Math.max(basename.lastIndexOf('/'), basename.lastIndexOf('\\'))
   let lastDot = basename.lastIndexOf('.')
-  while (lastDot > lastSlash) {
+  while (lastDot > lastSlash && lastDot > 0) {
     out.push(basename.slice(lastDot + 1))
     lastDot = basename.lastIndexOf('.', lastDot - 1)
   }
