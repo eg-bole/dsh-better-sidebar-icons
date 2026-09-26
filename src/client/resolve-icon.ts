@@ -1,8 +1,8 @@
 /**
  * The icon resolution engine: a port of the VSCode better-sidebar-icons engine to
- * plain functions (the same logic dsh-better-sidebar's core explorer icon
- * theme uses, kept dependency-free here so the client overlay can resolve
- * entry names without React).
+ * plain functions (the same logic DSH's own explorer icon theme uses, kept
+ * dependency-free here so the client overlay can resolve entry names without
+ * React).
  *
  * Data: the generated `icons-manifest.generated.ts` (from the vscode-icons
  * extension set) holds the VSCode icon-theme maps — fileNames /

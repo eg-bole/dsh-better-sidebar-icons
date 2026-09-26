@@ -1,7 +1,7 @@
 {
   "name": "dsh-better-sidebar-icons",
-  "version": "0.1.2",
-  "description": "VSCode-style file/folder icon theme for the dsh-better-sidebar explorer and editor tabs (vscode-icons port). Applied as a pure DOM overlay: no core changes, unload-safe.",
+  "version": "0.2.0",
+  "description": "VSCode-style file/folder icon theme for the DSH right-Sidebar explorer: registers the whole theme through dsh-better-sidebar's public registerFileIcon API, and falls back to a pure DOM overlay (unload-safe) on a host without that service.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -37,9 +37,13 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "dsh-better-sidebar": "^0.6.0"
+    "@deepseek-ai/dsh-client-ui-sidebar-files": "^0.1.7-rc.1",
+    "dsh-better-sidebar": "^0.19.1"
   },
   "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-sidebar-files": {
+      "optional": true
+    },
     "dsh-better-sidebar": {
       "optional": true
     }

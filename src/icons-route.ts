@@ -1,8 +1,8 @@
 /**
  * Icon assets route: serves the bundled file/folder icon SVGs
  * (/dsh-better-sidebar-icons/icons/<name>.svg) that the client overlay resolves
- * entries to (src/client/resolve-icon.ts maps a file/folder name to an icon
- * file basename, e.g. `file_type_typescript.svg`; this route serves bytes).
+ * explorer entries to (src/client/resolve-icon.ts maps a file/folder name to an
+ * icon file basename, e.g. `file_type_typescript.svg`; this route serves bytes).
  *
  * Caching contract: static assets — `cache-control: no-cache` plus an ETag
  * (content hash, memoized per file by mtime/size) with If-None-Match 304

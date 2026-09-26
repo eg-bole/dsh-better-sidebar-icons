@@ -1,0 +1,8 @@
+# Visual-confirmation overlay: back the third-party better-sidebar bundle out of
+# the web profile so the DSH-native right-Sidebar file explorer is the only
+# `files` tab type mounted. Its guide entry otherwise shadows the native one
+# (both register a `files` tab type; the first registration wins the guide).
+#
+# Usage: dsh web --patch G:/Program/personal/dsh-follow/dsh-file-icon-theme/scripts/only-native-explorer.yml
+- id: better-sidebar
+  disabled: true
