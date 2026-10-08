@@ -65,7 +65,7 @@ dsh plugin --profile web remove dsh-better-sidebar-icons
 
 ## ✅ 适用版本
 
-本插件自身要求 **DSH `0.1.7-rc.1+`**（两条路径都用该版本起的稳定钩子）。
+本插件支持 **DSH `0.1.7-rc.1` 及以上的兼容版本**，包括新版 `0.2.0-rc.2`。原生文件树的适配范围显式覆盖 `@deepseek-ai/dsh-client-ui-sidebar-files` 的 `0.1.x` 与 `0.2.x` 发布线。
 
 | 你的右侧栏资源管理器 | 走的路径 | `dsh-better-sidebar` |
 |---|---|---|
