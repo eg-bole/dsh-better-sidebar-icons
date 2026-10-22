@@ -65,7 +65,7 @@ dsh plugin --profile web remove dsh-better-sidebar-icons
 
 ## ✅ 适用版本
 
-本插件支持 **DSH `0.1.7-rc.1` 及以上的兼容版本**，包括新版 `0.2.0-rc.2`。原生文件树的适配范围显式覆盖 `@deepseek-ai/dsh-client-ui-sidebar-files` 的 `0.1.x` 与 `0.2.x` 发布线。
+本插件支持 **DSH `0.1.7-rc.1` 及以上的兼容版本**，包括 `0.2.0-rc.2` 和 `0.2.1-rc.2`。`0.2.1-rc.2` 将信任主机列表从 `webRuntime` 迁移到了 `webStartup`；插件现在按请求读取对应版本提供的服务。原生文件树的 peer 范围覆盖 `@deepseek-ai/dsh-client-ui-sidebar-files` 的 `0.1.x` 与 `0.2.x` 发布线。
 
 | 你的右侧栏资源管理器 | 走的路径 | `dsh-better-sidebar` |
 |---|---|---|
@@ -103,7 +103,7 @@ DSH 自带的资源管理器（`dsh-client-ui-sidebar-files`）**没有图标主
 `files` 页签的名字来自「树还挂载时」记下的工作区根目录（按页签 id 记；切到别的页签后树会卸载，整个 pane 还会被重挂载，届时 DOM 里已经没有根路径了）。
 
 - **client half**（浏览器）：`MutationObserver` 持续扫描上述锚点，用匹配引擎把名字解析成图标文件，把宿主 svg 标记为隐藏、并在其旁插入一个指向插件路由的 `<img>`；React 重渲染后自动重应用，卸载时全部恢复。
-- **host half**（Node）：`/dsh-better-sidebar-icons/icons/<name>.svg` 路由，白名单 + 浏览器信任栅栏（同 /api 网关的 DNS-rebinding 防线）+ ETag/304。
+- **host half**（Node）：`/dsh-better-sidebar-icons/icons/<name>.svg` 路由，白名单 + 浏览器信任栅栏（信任主机从 `webStartup` 或旧版 `webRuntime` 读取，与 /api 网关的 DNS-rebinding 防线一致）+ ETag/304。
 
 #### 为什么不直接替换宿主节点
 
